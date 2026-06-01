@@ -1,0 +1,10 @@
+# true: close gripper, false: open gripper
+bool close
+
+# Optional feed-forward torque in N*m. Use <= 0 to apply the node default.
+float64 hold_torque
+---
+bool success
+string message
+float64 position
+float64 effort

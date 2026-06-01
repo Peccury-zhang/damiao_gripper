@@ -1,0 +1,6 @@
+/build/
+/install/
+/.vscode/
+/log/
+/src/gripper_dm/files/CANFD分析仪/
+/src/gripper_dm/files/USB_Gripper/
