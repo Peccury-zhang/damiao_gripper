@@ -24,8 +24,8 @@
 | 电机 Master ID（反馈） | `0x12`（已确认） | confirm_id.py 实测 |
 | 终端电阻 | 120Ω（分析仪内置可启用） | ZCAN_SetResistanceEnable |
 | 打开位置 | 0.10 rad | 用户指定 |
-| 闭合位置 | 1.10 rad | 用户指定 |
-| 最大速度 | 1.0 rad/s | 用户指定 |
+| 闭合位置 | 1.05 rad | 用户指定 |
+| 最大速度 | 2.0 rad/s | 用户指定 |
 
 ### 1.1 与旧方案的区别
 
@@ -219,6 +219,8 @@ ros2_ws/src/
 ├── gripper_dm_msgs/
 │   ├── CMakeLists.txt
 │   ├── package.xml
+│   ├── msg/
+│   │   └── GripperStatus.msg    # 电机状态消息
 │   └── srv/
 │       └── SetGripper.srv       # bool close, float64 hold_torque → bool success, string message, float64 position, float64 effort
 └── gripper_dm/
@@ -252,7 +254,32 @@ ros2_ws/src/
 | `/close_gripper` | `std_srvs/srv/Trigger` | 快捷关闭 |
 | `/reconnect_gripper` | `std_srvs/srv/Trigger` | 重连硬件 |
 
-### 4.2 调用示例
+### 4.2 Topic 接口
+
+| Topic | 类型 | 频率 | 用途 |
+|---|---|---|---|
+| `/joint_states` | `sensor_msgs/JointState` | 100 Hz | 关节状态（position/velocity/effort） |
+| `/gripper_status` | `gripper_dm_msgs/GripperStatus` | 20 Hz | 电机完整状态（位置/速度/力矩/电流/温度/模式/状态） |
+
+#### GripperStatus.msg 字段说明
+
+| 字段 | 类型 | 单位 | 说明 |
+|---|---|---|---|
+| `header` | `std_msgs/Header` | — | 时间戳 + frame_id |
+| `position` | `float64` | rad | 当前位置（来自反馈帧） |
+| `velocity` | `float64` | rad/s | 当前速度（来自反馈帧） |
+| `torque` | `float64` | N·m | 反馈力矩（来自反馈帧） |
+| `current` | `float64` | A | 估算电流 = torque / Kt（Kt=0.335 Nm/A，可配置） |
+| `temperature_mos` | `uint8` | °C | MOS 管温度（来自反馈帧） |
+| `temperature_rotor` | `uint8` | °C | 转子温度（来自反馈帧） |
+| `state` | `string` | — | 控制器状态：idle / moving_to_open / moving_to_close / holding_torque / clamped |
+| `enabled` | `bool` | — | 电机是否使能 |
+| `mode` | `string` | — | 电机控制模式：MIT / POS_VEL / VEL / POS_FORCE |
+| `target_position` | `float64` | rad | 当前目标位置 |
+
+> **关于电流估算**：电机反馈帧不直接提供电流值，通过 `I = τ / Kt` 估算。默认 `Kt = 0.335 Nm/A`（DM-J4310-2EC 典型值），可通过 `torque_constant` 参数调整。
+
+### 4.3 调用示例
 
 ```bash
 conda activate py312  # Python 3.12
@@ -264,6 +291,7 @@ ros2 service call /close_gripper std_srvs/srv/Trigger
 ros2 service call /open_gripper std_srvs/srv/Trigger
 ros2 service call /set_gripper gripper_dm_msgs/srv/SetGripper "{close: true, hold_torque: 0.5}"
 ros2 topic echo /joint_states  # 查看实时位置/速度/力矩
+ros2 topic echo /gripper_status  # 查看电机完整状态（20Hz）
 ```
 
 ---
@@ -335,9 +363,10 @@ class DMGripperController:
 ### 5.4 gripper_node.py（ROS 2 节点）
 
 - 100Hz 定时器：运行控制循环 + 发布 JointState
+- 20Hz 定时器：发布 GripperStatus（电机完整状态）
 - 4 个 service server（ReentrantCallbackGroup + MultiThreadedExecutor）
 - `_try_connect()` 失败不崩溃，记录诊断信息
-- `/gripper/reconnect` 用于硬件恢复后重连
+- `/reconnect_gripper` 用于硬件恢复后重连
 
 ---
 
@@ -493,6 +522,7 @@ python3 fast_scan.py
 8. ✅ colcon build 编译通过
 9. ✅ MIT 控制测试通过（test_mit_full.py 5 个位置全部到位）
 10. ✅ ROS 2 节点打开/关闭功能验证通过
+11. ✅ `/gripper_status` Topic：20Hz 发布电机完整状态（GripperStatus.msg）
 
 ### 9.2 待优化
 

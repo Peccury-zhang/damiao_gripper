@@ -7,7 +7,7 @@ gripper_node:
     dbit_baud: 5000000
     open_position: 0.1
     close_position: 1.05
-    max_speed: 2.0
+    max_speed: 6.0
     kp_move: 10.0
     kd_move: 0.5
     kp_hold: 20.0
@@ -20,3 +20,4 @@ gripper_node:
     motion_timeout: 5.0
     decel_distance: 0.15
     joint_name: "gripper_joint"
+    torque_constant: 0.335

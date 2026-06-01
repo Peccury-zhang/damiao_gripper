@@ -37,6 +37,9 @@ class DMGripperController:
         self._current_position = 0.0
         self._current_velocity = 0.0
         self._current_torque = 0.0
+        self._t_mos = 0
+        self._t_rotor = 0
+        self._mode = "MIT"
         self._hold_torque_cmd = 0.0
         self._enabled = False
         self._interpolated_pos = self._open_pos
@@ -65,6 +68,18 @@ class DMGripperController:
     @property
     def is_enabled(self):
         return self._enabled
+
+    @property
+    def temperature_mos(self):
+        return self._t_mos
+
+    @property
+    def temperature_rotor(self):
+        return self._t_rotor
+
+    @property
+    def mode(self):
+        return self._mode
 
     def initialize(self):
         self._motor._driver.receive_fd(count=100, timeout_ms=0)
@@ -104,6 +119,8 @@ class DMGripperController:
             self._current_position = fb['position']
             self._current_velocity = fb['velocity']
             self._current_torque = fb['torque']
+            self._t_mos = fb.get('t_mos', 0)
+            self._t_rotor = fb.get('t_rotor', 0)
         if self._state == GripperState.MOVING_TO_OPEN:
             self._run_position_interpolation(self._open_pos)
         elif self._state == GripperState.MOVING_TO_CLOSE:
@@ -147,6 +164,9 @@ class DMGripperController:
             'torque': self._current_torque,
             'target_position': self._target_position,
             'enabled': self._enabled,
+            't_mos': self._t_mos,
+            't_rotor': self._t_rotor,
+            'mode': self._mode,
         }
 
     def _run_position_interpolation(self, target):

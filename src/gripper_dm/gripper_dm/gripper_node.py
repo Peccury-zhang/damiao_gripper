@@ -9,6 +9,7 @@ from builtin_interfaces.msg import Time
 from std_srvs.srv import Trigger
 
 from gripper_dm_msgs.srv import SetGripper
+from gripper_dm_msgs.msg import GripperStatus
 from gripper_dm.canfd_driver import CANFDDriver
 from gripper_dm.motor_protocol import MotorProtocol
 from gripper_dm.gripper_controller import DMGripperController, GripperState
@@ -41,12 +42,14 @@ class GripperNode(Node):
         self.declare_parameter('motion_timeout', 5.0)
         self.declare_parameter('decel_distance', 0.15)
         self.declare_parameter('joint_name', 'gripper_joint')
+        self.declare_parameter('torque_constant', 0.335)
 
         lib_path = self._resolve_lib_path()
         self._channel_index = self.get_parameter('channel_index').value
         self._abit_baud = self.get_parameter('abit_baud').value
         self._dbit_baud = self.get_parameter('dbit_baud').value
         self._joint_name = self.get_parameter('joint_name').value
+        self._torque_constant = self.get_parameter('torque_constant').value
 
         params = {
             'open_position': self.get_parameter('open_position').value,
@@ -97,6 +100,10 @@ class GripperNode(Node):
         rate = self.get_parameter('control_rate').value
         self._timer = self.create_timer(1.0 / rate, self._control_loop)
         self._pub_joint_state = self.create_publisher(JointState, 'joint_states', 10)
+        self._pub_gripper_status = self.create_publisher(
+            GripperStatus, 'gripper_status', 10
+        )
+        self._status_timer = self.create_timer(0.05, self._publish_gripper_status)
         self._cycle_count = 0
 
         self.get_logger().info(f'GripperNode started at {rate} Hz')
@@ -208,6 +215,25 @@ class GripperNode(Node):
         js.velocity = [self._controller.velocity]
         js.effort = [self._controller.torque]
         self._pub_joint_state.publish(js)
+
+    def _publish_gripper_status(self):
+        msg = GripperStatus()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self._joint_name
+        msg.position = self._controller.position
+        msg.velocity = self._controller.velocity
+        msg.torque = self._controller.torque
+        if self._torque_constant > 0:
+            msg.current = self._controller.torque / self._torque_constant
+        else:
+            msg.current = 0.0
+        msg.temperature_mos = self._controller.temperature_mos
+        msg.temperature_rotor = self._controller.temperature_rotor
+        msg.state = self._controller.state.value
+        msg.enabled = self._controller.is_enabled
+        msg.mode = self._controller.mode
+        msg.target_position = self._controller.target_position
+        self._pub_gripper_status.publish(msg)
 
     def destroy_node(self):
         self.get_logger().info('Shutting down...')

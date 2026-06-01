@@ -1,0 +1,11 @@
+std_msgs/Header header
+float64 position
+float64 velocity
+float64 torque
+float64 current
+uint8 temperature_mos
+uint8 temperature_rotor
+string state
+bool enabled
+string mode
+float64 target_position
