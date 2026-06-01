@@ -50,6 +50,8 @@ def encode_mit_frame(q_des, dq_des, kp, kd, tau_ff):
 def decode_feedback(data):
     if len(data) < FRAME_LEN:
         return None
+    if data[2] in (0x33, 0x55, 0xAA) and data[3] in (9, 10, 11):
+        return None
     q_uint = (data[1] << 8) | data[2]
     dq_uint = (data[3] << 4) | ((data[4] >> 4) & 0x0F)
     tau_uint = ((data[4] & 0x0F) << 8) | data[5]
@@ -75,10 +77,17 @@ def disable_motor(can_id=CAN_ID):
     return bytes([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD])
 
 
-def set_mode(mode=10, can_id=CAN_ID):
+def set_mode_frame(mode_code=1, can_id=CAN_ID):
     id_low = can_id & 0xFF
     id_high = (can_id >> 8) & 0xFF
-    return bytes([id_low, id_high, 0x55, 10, mode, 0, 0, 0])
+    return bytes([id_low, id_high, 0x55, 10, mode_code, 0, 0, 0])
+
+
+MODE_SWITCH_CAN_ID = 0x7FF
+MODE_MIT = 1
+MODE_POS_VEL = 2
+MODE_VEL = 3
+MODE_POS_FORCE = 4
 
 
 class MotorProtocol:
@@ -115,10 +124,10 @@ class MotorProtocol:
             self._driver.transmit_fd(self._can_id, data)
             time.sleep(interval)
 
-    def send_set_mode(self, mode=10, count=1, interval=0.005):
-        data = set_mode(mode, self._can_id)
+    def send_set_mode(self, mode_code=MODE_MIT, count=3, interval=0.005):
+        data = set_mode_frame(mode_code, self._can_id)
         for _ in range(count):
-            self._driver.transmit(self._can_id, data)
+            self._driver.transmit_fd(MODE_SWITCH_CAN_ID, data, brs=1)
             time.sleep(interval)
 
     def receive_feedback(self, timeout_ms=0):

@@ -1,4 +1,5 @@
 import os
+import logging
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -12,6 +13,8 @@ from gripper_dm.canfd_driver import CANFDDriver
 from gripper_dm.motor_protocol import MotorProtocol
 from gripper_dm.gripper_controller import DMGripperController, GripperState
 
+logging.basicConfig(level=logging.INFO)
+
 
 class GripperNode(Node):
     def __init__(self):
@@ -24,15 +27,19 @@ class GripperNode(Node):
         self.declare_parameter('abit_baud', 1000000)
         self.declare_parameter('dbit_baud', 5000000)
         self.declare_parameter('open_position', 0.1)
-        self.declare_parameter('close_position', 1.1)
-        self.declare_parameter('max_speed', 1.0)
+        self.declare_parameter('close_position', 1.05)
+        self.declare_parameter('max_speed', 2.0)
         self.declare_parameter('kp_move', 10.0)
         self.declare_parameter('kd_move', 0.5)
+        self.declare_parameter('kp_hold', 20.0)
+        self.declare_parameter('kd_hold', 1.0)
         self.declare_parameter('hold_torque', 1.0)
-        self.declare_parameter('position_tolerance', 0.02)
+        self.declare_parameter('position_tolerance', 0.05)
         self.declare_parameter('stall_speed_threshold', 0.1)
         self.declare_parameter('stall_torque_threshold', 0.3)
         self.declare_parameter('control_rate', 100.0)
+        self.declare_parameter('motion_timeout', 5.0)
+        self.declare_parameter('decel_distance', 0.15)
         self.declare_parameter('joint_name', 'gripper_joint')
 
         lib_path = self._resolve_lib_path()
@@ -47,11 +54,15 @@ class GripperNode(Node):
             'max_speed': self.get_parameter('max_speed').value,
             'kp_move': self.get_parameter('kp_move').value,
             'kd_move': self.get_parameter('kd_move').value,
+            'kp_hold': self.get_parameter('kp_hold').value,
+            'kd_hold': self.get_parameter('kd_hold').value,
             'hold_torque': self.get_parameter('hold_torque').value,
             'position_tolerance': self.get_parameter('position_tolerance').value,
             'stall_speed_threshold': self.get_parameter('stall_speed_threshold').value,
             'stall_torque_threshold': self.get_parameter('stall_torque_threshold').value,
             'control_rate': self.get_parameter('control_rate').value,
+            'motion_timeout': self.get_parameter('motion_timeout').value,
+            'decel_distance': self.get_parameter('decel_distance').value,
         }
 
         self._driver = CANFDDriver(lib_path)
@@ -86,6 +97,7 @@ class GripperNode(Node):
         rate = self.get_parameter('control_rate').value
         self._timer = self.create_timer(1.0 / rate, self._control_loop)
         self._pub_joint_state = self.create_publisher(JointState, 'joint_states', 10)
+        self._cycle_count = 0
 
         self.get_logger().info(f'GripperNode started at {rate} Hz')
 
@@ -179,6 +191,15 @@ class GripperNode(Node):
         except Exception as e:
             self.get_logger().error(f'Control loop error: {e}')
             return
+
+        self._cycle_count += 1
+        if self._cycle_count % 100 == 0:
+            state = self._controller.state
+            pos = self._controller.position
+            vel = self._controller.velocity
+            self.get_logger().info(
+                f'State={state.value}, pos={pos:.4f}, vel={vel:.4f}'
+            )
 
         js = JointState()
         js.header.stamp = self.get_clock().now().to_msg()

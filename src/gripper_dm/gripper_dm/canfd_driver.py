@@ -128,10 +128,6 @@ class ZCAN_DEVICE_INFO(Structure):
 class ZCAN_TRANSMIT_FRAME(Structure):
     _fields_ = [
         ("can_id", c_uint),
-        ("transmit_type", c_ubyte),
-        ("remote_flag", c_ubyte),
-        ("ext_flag", c_ubyte),
-        ("reserved", c_ubyte),
         ("can_dlc", c_ubyte),
         ("data", c_ubyte * 8),
     ]
@@ -140,13 +136,10 @@ class ZCAN_TRANSMIT_FRAME(Structure):
 class ZCAN_TRANSMITFD_FRAME(Structure):
     _fields_ = [
         ("can_id", c_uint),
-        ("transmit_type", c_ubyte),
-        ("remote_flag", c_ubyte),
-        ("ext_flag", c_ubyte),
-        ("reserved", c_ubyte),
         ("len", c_ubyte),
         ("flags", c_ubyte),
-        ("reserved2", c_ubyte * 2),
+        ("reserved1", c_ubyte),
+        ("reserved2", c_ubyte),
         ("data", c_ubyte * 64),
     ]
 
@@ -154,7 +147,6 @@ class ZCAN_TRANSMITFD_FRAME(Structure):
 class ZCAN_Transmit_Data(Structure):
     _fields_ = [
         ("frame", ZCAN_TRANSMIT_FRAME),
-        ("transmit_type", c_uint),
     ]
 
 
@@ -168,7 +160,6 @@ class ZCAN_Receive_Data(Structure):
 class ZCAN_TransmitFD_Data(Structure):
     _fields_ = [
         ("frame", ZCAN_TRANSMITFD_FRAME),
-        ("transmit_type", c_uint),
     ]
 
 
@@ -301,7 +292,6 @@ class CANFDDriver:
         if self._ch_handle == INVALID_CHANNEL_HANDLE:
             raise RuntimeError("Channel not initialized")
         msg = ZCAN_TransmitFD_Data()
-        msg.transmit_type = 0
         msg.frame.can_id = make_can_id(eff, rtr, can_id)
         msg.frame.len = len(data_bytes)
         msg.frame.flags = (1 if brs else 0)
@@ -313,7 +303,6 @@ class CANFDDriver:
         if self._ch_handle == INVALID_CHANNEL_HANDLE:
             raise RuntimeError("Channel not initialized")
         msg = ZCAN_Transmit_Data()
-        msg.transmit_type = 0
         msg.frame.can_id = make_can_id(eff, rtr, can_id)
         msg.frame.can_dlc = len(data_bytes)
         for i in range(min(len(data_bytes), 8)):
